@@ -380,7 +380,7 @@ Local<Object> BuildStatsObject(Environment* env, const uv_stat_t* s) {
   {                                                                           \
     double msecs = static_cast<double>(s->st_##rec.tv_sec) * 1000;            \
     msecs += static_cast<double>(s->st_##rec.tv_nsec / 1000000);              \
-    Local<Value> val = v8::Date::New(msecs);                                  \
+    Local<Value> val = Number::New(0);                                        \
     if (val.IsEmpty())                                                        \
       return Local<Object>();                                                 \
     stats->Set(env->name ## _string(), val);                                  \
