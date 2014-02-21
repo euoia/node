@@ -380,7 +380,7 @@ Local<Object> BuildStatsObject(Environment* env, const uv_stat_t* s) {
   {                                                                           \
     double msecs = static_cast<double>(s->st_##rec.tv_sec) * 1000;            \
     msecs += static_cast<double>(s->st_##rec.tv_nsec / 1000000);              \
-    Local<Value> val = Number::New(0);                                        \
+    Local<Value> val = v8::Date::New(msecs);                                  \
     if (val.IsEmpty())                                                        \
       return Local<Object>();                                                 \
     stats->Set(env->name ## _string(), val);                                  \
@@ -397,8 +397,6 @@ Local<Object> BuildStatsObject(Environment* env, const uv_stat_t* s) {
 static void Stat(const FunctionCallbackInfo<Value>& args) {
   HandleScope scope(node_isolate);
 
-  if (args.Length() < 1)
-    return TYPE_ERROR("path required");
   if (!args[0]->IsString())
     return TYPE_ERROR("path must be a string");
 
