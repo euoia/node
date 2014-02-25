@@ -126,7 +126,7 @@ static void After(uv_fs_t *req) {
 
   // Allocate space for two args. We may only use one depending on the case.
   // (Feel free to increase this if you need more)
-  Local<Value> argv[2];
+  Local<Value> argv[14];
 
   if (req->result < 0) {
     // If the request doesn't have a path parameter set.
@@ -189,8 +189,45 @@ static void After(uv_fs_t *req) {
       case UV_FS_STAT:
       case UV_FS_LSTAT:
       case UV_FS_FSTAT:
-        argv[1] = BuildStatsObject(env,
-                                   static_cast<const uv_stat_t*>(req->ptr));
+        //argv[1] = BuildStatsObject(env,
+        //                           static_cast<const uv_stat_t*>(req->ptr));
+
+				// Integer.
+        argv[1] = Integer::New(static_cast<const uv_stat_t*>(req->ptr)->st_dev, node_isolate);
+        argv[2] = Integer::New(static_cast<const uv_stat_t*>(req->ptr)->st_mode, node_isolate);
+        argv[3] = Integer::New(static_cast<const uv_stat_t*>(req->ptr)->st_nlink, node_isolate);
+        argv[4] = Integer::New(static_cast<const uv_stat_t*>(req->ptr)->st_uid, node_isolate);
+        argv[5] = Integer::New(static_cast<const uv_stat_t*>(req->ptr)->st_gid, node_isolate);
+        argv[6] = Integer::New(static_cast<const uv_stat_t*>(req->ptr)->st_rdev, node_isolate);
+				// TODO # if defined(__POSIX__) for blksize
+        argv[7] = Integer::New(static_cast<const uv_stat_t*>(req->ptr)->st_blksize, node_isolate);
+
+			// Number.
+        argv[8] = Number::New(static_cast<const uv_stat_t*>(req->ptr)->st_ino);
+        argv[9] = Number::New(static_cast<const uv_stat_t*>(req->ptr)->st_size);
+        argv[10] = Number::New(static_cast<const uv_stat_t*>(req->ptr)->st_blocks);
+
+			// Date.
+#define X(idx, rec)                                                           \
+  {                                                                           \
+    double msecs =                                                            \
+	  static_cast<const uv_stat_t*>(req->ptr)->st_##rec.tv_sec * 1000;        \
+    msecs +=                                                                  \
+	  static_cast<const uv_stat_t*>(req->ptr)->st_##rec.tv_nsec / 1000000;    \
+    Local<Value> val = v8::Date::New(msecs);                                  \
+    if (val.IsEmpty()) {                                                      \
+      val = Local<Object>();                                                  \
+	} else {                                                                  \
+		argv[idx] = val;                                                      \
+	}                                                                         \
+  }
+				X(11, atim)
+				X(12, mtim)
+				X(13, ctim)
+				X(14, birthtim)
+#undef X
+
+				argc = 14;
         break;
 
       case UV_FS_READLINK:
@@ -364,7 +401,7 @@ Local<Object> BuildStatsObject(Environment* env, const uv_stat_t* s) {
 
 #define X(name)                                                               \
   {                                                                           \
-    Local<Value> val = Number::New(static_cast<double>(s->st_##name));        \
+    Local<Value> val = Number::New(s->st_##name);        \
     if (val.IsEmpty())                                                        \
       return Local<Object>();                                                 \
     stats->Set(env->name ## _string(), val);                                  \
@@ -378,8 +415,8 @@ Local<Object> BuildStatsObject(Environment* env, const uv_stat_t* s) {
 
 #define X(name, rec)                                                          \
   {                                                                           \
-    double msecs = static_cast<double>(s->st_##rec.tv_sec) * 1000;            \
-    msecs += static_cast<double>(s->st_##rec.tv_nsec / 1000000);              \
+    double msecs = s->st_##rec.tv_sec * 1000;            \
+    msecs += s->st_##rec.tv_nsec / 1000000;              \
     Local<Value> val = v8::Date::New(msecs);                                  \
     if (val.IsEmpty())                                                        \
       return Local<Object>();                                                 \
@@ -397,18 +434,68 @@ Local<Object> BuildStatsObject(Environment* env, const uv_stat_t* s) {
 static void Stat(const FunctionCallbackInfo<Value>& args) {
   HandleScope scope(node_isolate);
 
+  if (args.Length() < 1)
+    return TYPE_ERROR("path required");
   if (!args[0]->IsString())
     return TYPE_ERROR("path must be a string");
+  if (args[1]->IsFunction() == 0)
+    return TYPE_ERROR("callback must be supplied");
 
   String::Utf8Value path(args[0]);
 
-  if (args[1]->IsFunction()) {
-    ASYNC_CALL(stat, args[1], *path)
-  } else {
-    SYNC_CALL(stat, *path, *path)
-    args.GetReturnValue().Set(
-        BuildStatsObject(env, static_cast<const uv_stat_t*>(SYNC_REQ.ptr)));
+  ASYNC_CALL(stat, args[1], *path);
+}
+
+static void StatSync(const FunctionCallbackInfo<Value>& args) {
+  if (args.Length() < 1)
+    return TYPE_ERROR("path required");
+  if (!args[0]->IsString())
+    return TYPE_ERROR("path must be a string");
+  if (args[1]->IsFunction() == 0)
+    return TYPE_ERROR("callback must be supplied");
+
+
+  String::Utf8Value path(args[0]);
+  SYNC_CALL(stat, *path, *path);
+
+  Local<Value> argv[14];
+  // Integer.
+  argv[0] = Integer::New(static_cast<const uv_stat_t*>(SYNC_REQ.ptr)->st_dev, node_isolate);
+  argv[1] = Integer::New(static_cast<const uv_stat_t*>(SYNC_REQ.ptr)->st_mode, node_isolate);
+  argv[2] = Integer::New(static_cast<const uv_stat_t*>(SYNC_REQ.ptr)->st_nlink, node_isolate);
+  argv[3] = Integer::New(static_cast<const uv_stat_t*>(SYNC_REQ.ptr)->st_uid, node_isolate);
+  argv[4] = Integer::New(static_cast<const uv_stat_t*>(SYNC_REQ.ptr)->st_gid, node_isolate);
+  argv[5] = Integer::New(static_cast<const uv_stat_t*>(SYNC_REQ.ptr)->st_rdev, node_isolate);
+  // TODO # if defined(__POSIX__) for blksize
+  argv[6] = Integer::New(static_cast<const uv_stat_t*>(SYNC_REQ.ptr)->st_blksize, node_isolate);
+
+  // Number.
+  argv[7] = Number::New(static_cast<const uv_stat_t*>(SYNC_REQ.ptr)->st_ino);
+  argv[8] = Number::New(static_cast<const uv_stat_t*>(SYNC_REQ.ptr)->st_size);
+  argv[9] = Number::New(static_cast<const uv_stat_t*>(SYNC_REQ.ptr)->st_blocks);
+
+// Date.
+#define X(idx, rec)                                                           \
+  {                                                                           \
+    double msecs =                                                            \
+    static_cast<const uv_stat_t*>(SYNC_REQ.ptr)->st_##rec.tv_sec * 1000;        \
+    msecs +=                                                                  \
+    static_cast<const uv_stat_t*>(SYNC_REQ.ptr)->st_##rec.tv_nsec / 1000000;    \
+    Local<Value> val = v8::Date::New(msecs);                                  \
+    if (val.IsEmpty()) {                                                      \
+      val = Local<Object>();                                                  \
+  } else {                                                                  \
+    argv[idx] = val;                                                      \
+  }                                                                         \
   }
+  X(10, atim)
+  X(11, mtim)
+  X(12, ctim)
+  X(13, birthtim)
+#undef X
+
+  Local<Object> context = env->process_object();
+  args[1].As<Function>()->Call(context, 13, argv);
 }
 
 static void LStat(const FunctionCallbackInfo<Value>& args) {
@@ -1070,6 +1157,7 @@ void InitFs(Handle<Object> target,
   NODE_SET_METHOD(target, "mkdir", MKDir);
   NODE_SET_METHOD(target, "readdir", ReadDir);
   NODE_SET_METHOD(target, "stat", Stat);
+  NODE_SET_METHOD(target, "statSync", StatSync);
   NODE_SET_METHOD(target, "lstat", LStat);
   NODE_SET_METHOD(target, "fstat", FStat);
   NODE_SET_METHOD(target, "link", Link);
