@@ -80,7 +80,7 @@
       var d = NativeModule.require('_debugger');
       d.start();
 
-    } else if (process._eval != null) {
+    } else if (process._eval !== undefined) {
       // User passed '-e' or '--eval' arguments to Node.
       evalScript('[eval]');
     } else if (process.argv[1]) {
